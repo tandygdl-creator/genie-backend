@@ -135,3 +135,5 @@ async def health():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+import json
+logging.info(f"Respuesta completa de Databricks: {json.dumps(data, indent=2)}")
