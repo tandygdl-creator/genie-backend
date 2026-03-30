@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Configuración desde variables de entorno
 # ================================
 DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "https://adb-8324102406929086.6.azuredatabricks.net")
-DATABRICKS_PAT = os.getenv("DATABRICKS_PAT" , "dapi6cb1f6f8a180c4ef7ea700f358c43e68-2")  
+DATABRICKS_PAT = os.getenv("DATABRICKS_PAT")  
 GENIE_SPACE_ID = os.getenv("GENIE_SPACE_ID", "01f082c07f49138b93fe35962b81617e")
 AUTH_DOMAIN = os.getenv("AUTH_DOMAIN", "ab-inbev.com")
 LOG_FILE = os.getenv("LOG_FILE", "usage.log")
