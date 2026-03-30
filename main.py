@@ -103,7 +103,7 @@ async def ask_genie(request: AskRequest):
         # Registro de éxito
         logging.info(f"Respuesta obtenida para {request.email}: {answer[:100]}...")
 
-        return AskResponse(answer=answer, conversation_id=conversation_id)
+        return AskResponse(answer=json.dumps(data), conversation_id=data.get("conversation_id"))
 
     except requests.exceptions.Timeout:
         logging.error(f"Timeout al llamar a Genie para {request.email}")
