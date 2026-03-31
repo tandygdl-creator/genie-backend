@@ -1,6 +1,7 @@
 import os
 import logging
 import requests
+import json
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # Configuración desde variables de entorno
 # ================================
 DATABRICKS_HOST = os.getenv("DATABRICKS_HOST", "https://adb-8324102406929086.6.azuredatabricks.net")
-DATABRICKS_PAT = os.getenv("DATABRICKS_PAT")  
+DATABRICKS_PAT = os.getenv("DATABRICKS_PAT")
 GENIE_SPACE_ID = os.getenv("GENIE_SPACE_ID", "01f082c07f49138b93fe35962b81617e")
 AUTH_DOMAIN = os.getenv("AUTH_DOMAIN", "ab-inbev.com")
 LOG_FILE = os.getenv("LOG_FILE", "usage.log")
@@ -26,7 +27,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler(LOG_FILE, encoding="utf-8"),
-        logging.StreamHandler()  # Para ver también en consola
+        logging.StreamHandler()
     ]
 )
 
@@ -34,7 +35,7 @@ logging.basicConfig(
 # Modelos de datos para la API
 # ================================
 class AskRequest(BaseModel):
-    email: EmailStr  # valida formato de email
+    email: EmailStr
     question: str = Field(..., min_length=1, max_length=2000)
 
 class AskResponse(BaseModel):
@@ -46,16 +47,17 @@ class AskResponse(BaseModel):
 # ================================
 app = FastAPI(title="Genie Proxy", version="1.0.0")
 
-# Configura CORS para desarrollo (ajusta origins según el frontend que uses)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, restringir a tu dominio de GitHub Pages o dominio corporativo
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Después de definir AUTH_DOMAIN
+# ================================
+# Logs de depuración
+# ================================
 print(f"* AUTH_DOMAIN inicializado: '{AUTH_DOMAIN}'")
 
 def is_authorized_email(email: str) -> bool:
@@ -77,7 +79,6 @@ async def ask_genie(request: AskRequest):
     logging.info(f"Usuario {request.email} pregunta: {request.question}")
 
     # 3. Construir la llamada a Databricks Genie
-    #    Documentación: https://docs.databricks.com/api/workspace/genie/startconversation
     url = f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/conversations"
     headers = {
         "Authorization": f"Bearer {DATABRICKS_PAT}",
@@ -85,32 +86,29 @@ async def ask_genie(request: AskRequest):
     }
     payload = {
         "content": request.question,
-        "email": request.email   # Opcional, lo enviamos para que Genie lo registre
+        "email": request.email
     }
 
     try:
-        # Iniciar conversación (siempre crea una nueva; para mantener historial habría que manejar conversation_id)
         response = requests.post(url, headers=headers, json=payload, timeout=30)
-        response.raise_for_status()  # Lanza excepción si status >= 400
+        response.raise_for_status()
         data = response.json()
 
-        # La respuesta puede tener distintos formatos según el estado de Genie.
-        # Según la API, devuelve un objeto con "conversation_id" y "answer" u otros campos.
-        # Ajusta según la respuesta real que obtengas.
-        answer = data.get("answer", "No se pudo obtener respuesta.")
-        conversation_id = data.get("conversation_id")
+        # Log de la respuesta completa (para depuración)
+        logging.info(f"Respuesta completa de Databricks: {json.dumps(data, indent=2)}")
 
-        # Registro de éxito
-        logging.info(f"Respuesta obtenida para {request.email}: {answer[:100]}...")
-
-        return AskResponse(answer=json.dumps(data), conversation_id=data.get("conversation_id"))
+        # Por ahora devolvemos el JSON completo para ver la estructura
+        # Luego ajustaremos para extraer el campo correcto
+        return AskResponse(
+            answer=json.dumps(data, indent=2),
+            conversation_id=data.get("conversation_id")
+        )
 
     except requests.exceptions.Timeout:
         logging.error(f"Timeout al llamar a Genie para {request.email}")
         raise HTTPException(status_code=504, detail="Tiempo de espera agotado con Databricks")
     except requests.exceptions.RequestException as e:
         logging.error(f"Error al llamar a Genie: {e}")
-        # Si se puede extraer el detalle de la respuesta, mejor
         detail = "Error al comunicarse con Databricks"
         if e.response is not None:
             try:
@@ -123,17 +121,15 @@ async def ask_genie(request: AskRequest):
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
 # ================================
-# Endpoint de salud (opcional)
+# Endpoint de salud
 # ================================
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 # ================================
-# Si se ejecuta directamente (no recomendado, usar uvicorn)
+# Ejecución directa (para pruebas locales)
 # ================================
-if __name__ == "__main__":
+if _name_ == "_main_":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-import json
-logging.info(f"Respuesta completa de Databricks: {json.dumps(data, indent=2)}")
